@@ -9,6 +9,7 @@ from diffusers import (DDIMScheduler, DPMSolverMultistepScheduler,
                        PNDMScheduler, StableDiffusionPipeline)
 from diffusers.pipelines.stable_diffusion.safety_checker import \
     StableDiffusionSafetyChecker
+from PIL import Image
 
 MODEL_ID = "stabilityai/stable-diffusion-2-1"
 MODEL_CACHE = "diffusers-cache"
@@ -42,6 +43,9 @@ class Predictor(BasePredictor):
         negative_prompt: str = Input(
             description="Specify things to not see in the output",
             default=None,
+        ),
+        image: Path = Input(
+            description="Inital image to generate variations of.",
         ),
         width: int = Input(
             description="Width of output image. Maximum size is 1024x768 or 768x1024 because of memory limits",
@@ -98,8 +102,13 @@ class Predictor(BasePredictor):
 
         self.pipe.scheduler = make_scheduler(scheduler, self.pipe.scheduler.config)
 
+        extra_kwargs = {
+            "image": Image.open(image).convert("RGB"),
+            "strength": prompt_strength,
+        }
+
         generator = torch.Generator("cuda").manual_seed(seed)
-        output = self.pipe(
+        output = self.pipe.img2img(
             prompt=[prompt] * num_outputs if prompt is not None else None,
             negative_prompt=[negative_prompt] * num_outputs
             if negative_prompt is not None
@@ -109,6 +118,7 @@ class Predictor(BasePredictor):
             guidance_scale=guidance_scale,
             generator=generator,
             num_inference_steps=num_inference_steps,
+            **extra_kwargs
         )
 
         output_paths = []
